@@ -1,0 +1,502 @@
+/*****GD*****/
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <linux/fs.h>
+#include <ext2fs/ext2_fs.h>
+
+
+typedef unsigned int u32;
+
+typedef struct ext2_group_desc 	GD;
+typedef struct ext2_super_block SUPER;
+typedef struct ext2_inode	INODE;
+typedef struct ext2_dir_entry_2	DIR;
+
+GD *gp;
+SUPER *sp;
+INODE *ip;
+DIR *dp;
+
+#define BLKSIZE 1024
+
+/******  GD struct  ********
+struct ext2_group_desc
+{
+  u32  bg_block_bitmap;          // Bmap block number
+  u32  bg_inode_bitmap;          // Imap block number
+  u32  bg_inode_table;           // Inodes begin block number
+  u16  bg_free_blocks_count;     // THESE are OBVIOUS
+  u16  bg_free_inodes_count;
+  u16  bg_used_dirs_count;
+  u16  bg_pad;                   // ignore these
+  u32  bg_reserved[3];
+};
+*******************/
+
+char buf[BLKSIZE];
+int fd;
+
+int get_block(int fd, int blk, char buf[])
+{
+	lseek(fd, (long)blk*BLKSIZE, 0);
+	read (fd, buf, BLKSIZE);
+}
+
+gd()
+{
+	// read GD block
+	get_block(fd, 2, buf);
+	gp = (GD *)buf;
+
+	printf("bg_block_bitmap = %d\n", gp->bg_block_bitmap);
+	printf("bg_inode_bitmap = %d\n", gp->bg_inode_bitmap);
+	printf("bg_inode_table = %d\n", gp->bg_inode_table);
+	printf("bg_free_blocks_count = %d\n", gp->bg_free_blocks_count);
+	printf("bg_free_inodes_count = %d\n", gp->bg_free_inodes_count);
+	printf("bg_used_dirs_count = %d\n", gp->bg_used_dirs_count);
+
+}
+
+char *disk = "mydisk";			// default disk incase no disk was entered as parameter
+
+main(int argc, char *argv[])
+{
+	if (argc > 1)
+		disk = argv[1];
+	fd = open(disk, O_RDONLY);
+
+	if (fd < 0)
+	{
+		printf("Disk open failure.\n");
+		exit(1);
+	}
+
+	gd();
+}
+/*****GD OUTPUT*****/
+stacy@Lappy prelab6]$ gd.out
+bg_block_bitmap = 8
+bg_inode_bitmap = 9
+bg_inode_table = 10
+bg_free_blocks_count = 1389
+bg_free_inodes_count = 130
+bg_used_dirs_count = 6
+
+/****BMAP*****/
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <ext2fs/ext2_fs.h>
+
+typedef struct ext2_group_desc 	GD;
+typedef struct ext2_super_block	SUPER;
+typedef struct ext2_inode	INODE;
+typedef struct ext2_dir_entry_2	DIR;
+
+#define BLKSIZE 1024
+
+GD	*gp;
+SUPER	*sp;
+INODE	*ip;
+DIR	*dp;
+
+char buf[BLKSIZE];
+int fd;
+
+int get_block(int fd, int blk, char buf[])
+{
+	lseek(fd, (long)blk*BLKSIZE, 0);
+	read(fd, buf, BLKSIZE);
+}
+
+int tst_bit(char *buf, int bit)
+{
+	int i, j;
+	
+	i = bit / 8; j = bit % 8;
+	if (buf[i] & (1 << j))
+		return 1;
+	return 0;
+}
+
+bmap()
+{
+	char buff[BLKSIZE];
+	int bmap, ninodes;
+	int i;
+
+	// First, read SUPER block
+	get_block (fd, 1, buf);
+	sp = (SUPER *)buf;
+
+	ninodes = sp->s_inodes_count;
+	printf("ninodes = %d\n", ninodes);
+
+	// Next, read GD block
+	get_block (fd, 2, buf);
+	gp = (GD *)buf;
+	
+	bmap = gp->bg_block_bitmap;
+	printf("bmap = %d\n", bmap);
+
+	// Next, read block_bitmap block
+	get_block(fd, bmap, buf);
+
+	for (i = 0; i < ninodes; i++)
+	{
+		(tst_bit(buf, i)) ? putchar('1') : putchar('0');
+		if (i && (i % 8) == 0)
+			printf(" ");
+	}
+	printf("\n");
+}
+
+char *disk = "mydisk";			// Default disk 
+
+main (int argc, char *argv[])
+{
+	if (argc > 1)
+		disk = argv[1];
+
+	fd = open(disk, O_RDONLY);
+	
+	if (fd < 0)
+	{
+		printf("Open %s failure\n", disk);
+		exit(1);
+
+	}
+	
+	bmap();
+}
+/*****BMAP OUTPUT*****/
+[stacy@Lappy prelab6]$ bmap.out
+ninodes = 184
+bmap = 8
+111111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111 11100000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000000
+
+/*****DIR.C*****/
+/*
+   struct ext2_dir_entry_2 {
+   u32  inode;        // Inode number; count from 1, NOT from 0
+   u16  rec_len;      // This entry length in bytes
+   u8   name_len;     // Name length in bytes
+   u8   file_type;    // for future use
+   char name[EXT2_NAME_LEN];  // File name: 1-255 chars, no NULL byte
+   }; */
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include<ext2fs/ext2_fs.h>
+
+#define BLKSIZE 1024
+
+typedef struct ext2_group_desc	GD;
+typedef struct ext2_super_block	SUPER;
+typedef struct ext2_inode	INODE;
+typedef struct ext2_dir_entry_2	DIR;
+
+
+GD	*gp;
+SUPER	*sp;
+INODE	*ip;
+DIR	*dp;
+int fd;
+int iblock;
+
+int get_block(int fd, int blk, char buf[])
+{
+	lseek(fd, (long)blk*BLKSIZE, 0);
+	read(fd, buf, BLKSIZE);
+}
+
+
+dir()
+{
+	char buf[1024], *cp, temp[256];
+	char dbuf[BLKSIZE];
+	int i;
+
+	get_block(fd, 2, buf);
+	gp = (GD *)buf;
+	cp = buf;
+	dp = (DIR *)buf;
+
+	iblock = gp->bg_inode_table;   // get inode start block#
+
+	get_block(fd, iblock, buf);
+	ip = (INODE *)buf + 1;
+	printf("inode_block=%d\n", iblock);
+	printf("ip->iblock[0] = %d\n",ip->i_block[0]);
+	for(i=0; i<12; i++){
+		if(ip->i_block[i] ==0)
+			break;
+		printf("i_block[%d] = %d\n",i,ip->i_block[i]);
+		get_block(fd,ip->i_block[i],dbuf);
+		
+		printf("	ino rec-len name_len name\n");
+		
+		dp = (DIR *)dbuf;
+		cp = dbuf;
+
+		while(cp < dbuf + BLKSIZE){
+		//	printf("%s, len: %d\n", dp->name,dp->name_len);
+			memset(temp, 0, sizeof(dp->name));
+		//	strncpy(temp, dp->name, dp->name_len);
+		
+		
+		temp[dp->name_len] = 0;
+			
+			printf("%4d %6d %6d		%s\n",dp->inode, dp->rec_len, dp->name_len, dp->name);
+			cp += dp->rec_len;
+			dp = (DIR *)cp;
+		}
+
+	}
+}
+
+int search(INODE *ip, char *name){
+
+	char buf[1024], *cp, temp[256];
+	char dbuf[BLKSIZE];
+	int i;
+
+	get_block(fd, 2, buf);
+	gp = (GD *)buf;
+	cp = buf;
+	dp = (DIR *)buf;
+
+	iblock = gp->bg_inode_table;   // get inode start block#
+
+	get_block(fd, iblock, buf);
+	ip = (INODE *)buf + 1;
+//	printf("inode_block=%d\n", iblock);
+//	printf("ip->iblock[0] = %d\n",ip->i_block[0]);
+	for(i=0; i<12; i++){
+		if(ip->i_block[i] ==0)
+			break;
+//		printf("i_block[%d] = %d\n",i,ip->i_block[i]);
+		get_block(fd,ip->i_block[i],dbuf);
+		
+//		printf("	ino rec-len name_len name\n");
+		
+		dp = (DIR *)dbuf;
+		cp = dbuf;
+
+		while(cp < dbuf + BLKSIZE){
+		//	printf("%s, len: %d\n", dp->name,dp->name_len);
+			memset(temp, 0, sizeof(dp->name));
+		//	strncpy(temp, dp->name, dp->name_len);
+		
+		
+		temp[dp->name_len] = 0;
+			if(!strcmp(dp->name, name) == 0){
+				printf("found %s\n",name);
+				return dp->inode;
+			}
+		//	printf("%4d %6d %6d		%s\n",dp->inode, dp->rec_len, dp->name_len, dp->name);
+			cp += dp->rec_len;
+			dp = (DIR *)cp;
+		}
+		printf("Could not find %s\n",name);
+		return 0;
+
+	}
+}
+
+char *disk = "mydisk";				// Default disk
+
+main (int argc, char *argv[])
+{
+	if (argc > 1) disk = argv[1];
+
+	fd = open(disk, O_RDONLY);
+
+	if (fd < 0)
+	{
+		printf("Open %s failure\n", disk);
+		exit(1);
+	}
+
+	dir();
+	
+}
+
+/*****DIR OUTPUT*****/
+
+[stacy@Lappy prelab6]$ a.out
+inode_block=10
+ip->iblock[0] = 33
+i_block[0] = 33
+	ino rec-len name_len name
+   2     12      1		.
+   2     12      2		..
+  11     20     10		lost+found
+  12     12      4		dir1
+  13     12      4		dir2
+  14     12      4		dir3
+  15     12      4		dir4
+  16     16      5		file1
+  17     16      5		file2
+  18     16      5		file3
+  19    884      5		file4
+
+/*****BALLOC*****/
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <ext2fs/ext2_fs.h>
+
+typedef struct ext2_group_desc	GD;
+typedef struct ext2_super_block	SUPER;
+typedef struct ext2_inode	INODE;
+typedef struct ext2_dir_entry_2	DIR;
+
+#define BLKSIZE 1024
+
+GD	*gp;
+SUPER	*sp;
+INODE	*ip;
+DIR	*dp;
+
+// **************** GLOBALS ****************** //
+int fd;
+int imap, bmap;
+int ninodes, nblocks, nfreeInodes, nfreeBlocks;
+
+int get_block(int fd, int blk, char buf[])
+{
+	lseek(fd, (long)blk*BLKSIZE, 0);
+	read(fd, buf, BLKSIZE);
+}
+
+int put_block(int fd, int blk, char buf[])
+{
+	lseek(fd, (long)blk*BLKSIZE, 0);
+	write(fd, buf, BLKSIZE);
+}
+
+int tst_bit(char *buf, int bit)
+{
+	int i, j;
+
+	i = bit / 8;	j = bit % 8;
+	
+	if (buf[i] & (1 << j))
+		return 1;
+	return 0;
+}
+
+int set_bit (char *buf, int bit)
+{
+	int i, j;
+	
+	i = bit / 8;	j = bit % 8;
+	
+	buf[i] |= (1 << j);
+}
+
+int clr_bit (char *buf, int bit)
+{
+	int i, j;
+
+	i = bit / 8;	j = bit % 8;
+
+	buf[i] &= ~(1 << j);
+}
+
+int decFreeInodes (int dev)
+{
+	char buf[BLKSIZE];
+
+	get_block(dev, 1, buf);
+	sp = (SUPER *)buf;
+	sp->s_free_inodes_count--;
+	put_block(dev, 1, buf);
+
+	get_block(dev, 2, buf);
+	gp = (GD *)buf;
+	gp->bg_free_inodes_count--;
+	put_block(dev, 2, buf);
+}
+
+int balloc(int dev)
+{
+	int i;
+	char buf[BLKSIZE];
+
+	// read block_bitmap block
+	get_block(dev, bmap, buf);
+
+	for (i = 0; i < ninodes; i++)
+	{
+		if (tst_bit(buf, i) == 0)
+		{
+			set_bit(buf, i);
+			decFreeInodes(dev);
+
+			put_block(dev, bmap, buf);
+
+			return i+1;
+		}
+	}
+	printf("balloc(): no more free inodes\n");
+	return 0;
+}
+
+char *disk = "mydisk";				// Default disk
+
+main(int argc, char *argv[])
+{
+	int i, bno;
+	char buf[BLKSIZE];
+
+	if (argc > 1) disk = argv[1];
+
+	fd = open(disk, O_RDWR);
+
+	if (fd < 0)
+	{
+		printf("Open %s failture\n", disk);
+		exit(1);
+	}
+
+	// read SUPER block
+	get_block(fd, 1, buf);
+	sp = (SUPER *)buf;
+
+	ninodes = sp->s_inodes_count;
+	nblocks = sp->s_blocks_count;	
+	nfreeInodes = sp->s_free_inodes_count;
+	nfreeBlocks = sp->s_free_blocks_count;
+	printf("ninodes = %d nblocks = %d nfreeInodes = %d nfreeBlocks = %d\n", ninodes, nblocks, nfreeInodes, nfreeBlocks);
+
+	// read GD block
+	get_block (fd, 2, buf);
+	gp = (GD *)buf;
+
+	bmap = gp->bg_block_bitmap;
+	printf("bmap = %d\n", bmap);
+	getchar();
+
+	for (i = 0; i < 5; i++)
+	{
+		bno = balloc(fd);
+		printf("allocated block = %d\n", bno);
+	}
+}
+
+/*****BALLOC OUTPUT*****/
+[stacy@Lappy prelab6]$ sudo balloc.out
+[sudo] password for stacy: 
+ninodes = 184 nblocks = 1440 nfreeInodes = 135 nfreeBlocks = 1389
+bmap = 8
+
+allocated ino = 64
+allocated ino = 65
+allocated ino = 66
+allocated ino = 67
+allocated ino = 68
+
