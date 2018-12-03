@@ -194,7 +194,7 @@ int pwd(MINODE *wd){
   return 0;
 }
 
-
+/***MAKE DIR*******/
 int make_dir(char *pathname)
 {
   int dev1, ino, r;
@@ -348,6 +348,140 @@ int my_mk(MINODE *pip, char child[256])
   touch(buf);
 
 }
+
+/******* CREAT ******/
+int creat_file(char *fileName)
+{
+  int ino,dev1,r;
+  char parent[256],child[256], temp[256];
+  MINODE *mip;
+  memset(parent,0,256);
+  memset(child,0,256);
+
+  //check if this is relative or absolute path
+  if(fileName[0] == '/' ) { dev1 = root->dev;} //absolute
+  else { dev1 = running->cwd->dev; } //relative
+
+  strncpy(temp,fileName, 256);
+
+  //get dirname and basename
+  strcpy(parent, dirname(temp));
+  strcpy(child, basename(fileName));
+
+  //get the ino of the parent
+  ino = getino(dev1, parent);
+  if(ino <= 0)
+  {
+    printf("Error. Parent directory does not exist\n");
+    return -1;
+  }
+
+  //load the parents inode inot memort
+  mip = iget(dev1, ino);
+  //check that the inode is a directory
+  if(!S_ISDIR(mip->INODE.i_mode))
+  {
+    printf("Error. Path is not a directory.\n");
+    return -1;
+  }
+  //search for the child in the parent directory
+  ino = search(dev1, child, &(mip->INODE));
+  if(0 < ino) //if this is true then the file already exists
+  {
+    printf("Error. File alread exists.\n");
+    return -1;
+  }
+  //create the file now.
+  r = my_creat(mip, child);
+  //write the creation to the disk
+  iput(mip->dev, mip);
+  return 1;
+}
+
+int my_creat(MINODE *pip, char child[])
+{
+  int inum, bnum, idealLen, needLen, newRec, i, j, blk[256];
+  MINODE *mip;
+  char *cp, buf[BLKSIZE],buf2[BLKSIZE];
+  DIR *dpPrev;
+
+  //first allocate an inode for the file onthe parent device
+  inum = ialloc(pip->dev);
+  //load that inode
+  mip = iget(pip->dev, inum);
+
+  //update and write the contents of the file into the inode
+  mip->INODE.i_mode = 0x81A4; //file mode
+  mip->INODE.i_uid = running->uid;
+  mip->INODE.i_gid = running->gid;
+  mip->INODE.i_size = 0;
+  mip->INODE.i_links_count = 1;
+  mip->INODE.i_atime = mip->INODE.i_ctime = mip->INODE.i_mtime = time(0L);
+  mip->INODE.i_blocks = 0;
+  mip->dirty = 1;
+  for(i = 0; i<15; i++)
+  {
+    mip->INODE.i_block[i] = 0;
+  }
+  //write the changes to the disk
+  iput(mip->dev, mip);
+
+  //write to parents directory
+  memset(buf,0,256);
+  needLen = 4*((8+strlen(child)/3)+4);
+  //get the block number by looking up the last used block
+  bnum = findLast(pip);
+  //check for room in thelast block now
+  get_block(pip->dev, bnum, buf); //load the block
+  cp = buf;
+  dp = (DIR *)cp;
+
+  while((dp->rec_len + cp) < buf + BLKSIZE)
+  {
+    cp += dp->rec_len;
+    dp = (DIR *)cp;
+  }
+
+  idealLen = 4*((8+dp->name_len+3)/4);
+  if(dp->rec_len - idealLen >= needLen) //there is room in the block
+  {
+    newRec = dp->rec_len - idealLen;//new rec length
+    dp->rec_len = idealLen;
+    cp += dp->rec_len;
+    dp = (DIR *)cp;
+    dp->inode = inum;
+    dp->name_len = strlen(child);
+    strncpy(dp->name, child, dp->name_len);
+    dp->rec_len = newRec;
+  }//if the above was false, then we need to allocate a new block for the data
+  else
+  {
+    bnum = balloc(pip->dev);
+    dp = (DIR *)buf;
+    dp->inode = inum;
+    dp->name_len = strlen(child);
+    strncpy(dp->name, child, dp->name_len);
+    dp->rec_len = BLKSIZE;
+    //add the block to the last
+    addLastBlock(pip, bnum);
+  }
+  //write the block back to the disk
+  put_block(pip->dev, bnum, buf);
+  pip->dirty = 1;
+  memset(buf, 0, BLKSIZE);
+  //get the parent ino and update the times
+  searchByIno(pip->dev, pip->ino, &running->cwd->INODE, buf);
+  touch(buf);
+  return 1;
+
+}
+
+
+
+
+
+
+
 //updates access times, creates file if needed
 int touch(char *name)
 {
@@ -359,7 +493,8 @@ int touch(char *name)
   if(0 >= ino) //the file doent exist so create it
   {
     //CALL CREATE
-    printf("FILE oesnt exist, ccreate it\n");
+    if(DEBUG){printf("FILE oesnt exist, ccreate it\n");}
+    creat_file(name);
     return 1;
   }
   mip = iget(dev, ino); //load the inode into memory

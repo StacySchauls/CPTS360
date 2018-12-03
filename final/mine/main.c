@@ -4,7 +4,7 @@
 int main(int argc, char *argv[]){
   int i, cmd;
   char line[128], cname[64], parameter[64];
-  if(argc == 2)
+  if(argc == 3)
   {
     if(strcmp(argv[2], "-d") == 0) {DEBUG = 1;}
   }

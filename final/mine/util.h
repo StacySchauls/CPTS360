@@ -44,8 +44,8 @@ int iput(int dev1, MINODE *mip);
 int put_block(int dev1, int blk, char *buf);
 int search(int dev1, char *str, INODE *ip);
 char **tokenPath(char *path);
-
-
+int creat_file(char *pathname);
+int my_creat(MINODE *pip, char child[]);
 int my_mk(MINODE *pip, char child[256]);
 int touch(char *name);
 int addLastBlock(MINODE *pip, int bnumber);
@@ -66,4 +66,4 @@ int incFreeInodes(int dev1);
 
 
 static char *cmnds[] = { "ls","pwd","cd","mkdir","rmdir","creat","link","symlink","unlink","chmod"};
-static int (*fptr[])(char *) = {(int (*)())ls, do_pwd, cd, make_dir, rm_dir, mylink, mysymlink, myunlink, mychmod};
+static int (*fptr[])(char *) = {(int (*)())ls, do_pwd, cd, make_dir, rm_dir,creat_file,mylink, mysymlink, myunlink, mychmod};
