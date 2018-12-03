@@ -140,14 +140,14 @@ int cd(char *pathname){
     return -1;
   }
 
-      //if we here then it should be adir
-      //put the current minode away
-      iput(dev, running->cwd);
+  //if we here then it should be adir
+  //put the current minode away
+  iput(dev, running->cwd);
 
-      //set new cwd to the new inode
-      running->cwd = mip;
-      return 0;
-    }
+  //set new cwd to the new inode
+  running->cwd = mip;
+  return 0;
+}
 
 /******* PWD *********/
 
@@ -187,7 +187,6 @@ int pwd(MINODE *wd){
     return -1;
   }
   pwd(next); //recursively go through each parent and print out their names
-  
   memset(temp, 0, 256);
   searchByIno(next->dev, wd->ino, &(next->INODE), temp);
   printf("%s/", temp);
@@ -196,9 +195,252 @@ int pwd(MINODE *wd){
 }
 
 
+int make_dir(char *pathname)
+{
+  int dev1, ino, r;
+  char parent[256], child[256], origPath[512];
+  MINODE *mip;
+  memset(parent, 0, 256);
+  memset(child, 0, 256);
+  memset(origPath, 0, 512);
+  strcpy(origPath, pathname);
+  //check for absolute vs relative
+
+  if(pathname[0] == '/') { dev1 = root->dev;}
+  else { dev1 = running->cwd->dev;}
+
+  //get basename and dirname
+
+  strcpy(parent, dirname(pathname));
+  strcpy(child, basename(origPath));
+
+  if(DEBUG) { printf("parent: %s  child: %s \n", parent, child);}
+  //get the ino for the parent
+  ino = getino(dev1, parent);
+  if(0>=ino)
+  {
+    printf("Error, invalid pathname\n");
+    return -1;
+  }
+  mip = iget(dev1, ino);
+  //check ifthe parent is a directory?
+  if(!S_ISDIR(mip->INODE.i_mode))
+  {
+    printf("Error, not a directory\n");
+    iput(dev1, mip);
+    return -1;
+  }
+
+  //look to see if the item already exists in the current dir
+  ino = search(dev1, child, &(mip->INODE));
+  if(ino <=0)
+  {
+    printf("Error. Directory already exists\n");
+    iput(mip->dev, mip);
+    return -1;
+  }
+
+  //acutually make the dir now. Above was simple checks and stuff
+  r = my_mk(mip, child);
+  iput(mip->dev, mip);
+
+}
+
+
+int my_mk(MINODE *pip, char child[256])
+{
+  int inum, bnum, idealLen, neededLen, newRec, i j;
+  MINODE *mip;
+  char *cp;
+  DIR *prevDP;
+  char buf[BLKSIZE];
+  char buf2[BLKSIZE];
+  int blk[256];
+
+  //get inode and block num
+  inum = ialloc(pip->dev);
+  bnum = balloc(pip->dev);
+
+  //get an minode for the inode
+  mip = iget(pip->dev, inum);
+
+  //update the contesnts of the minode
+  mip->INODE.i_mode = 0x41ED;  //its a dir
+  mip->INODE.i_uid = running->uid;
+  mip->INODE.i_gid = running->gid;
+  mip->INODE.i_size = BLKSIZE;
+  mip->INODE.i_links_count = 2;
+  mip->INODE.i_atime = mip->INODE.i_ctime = mip->INODE.mtime = time(0L); //update time
+  mip->INODE.mip->dirty = 1;
+  for(i = 0; i < 15; i++)
+  {
+    mip->INODE->i_block[i] = 0;
+  }
+
+  mip->INODE->i_block[0] = bnum;
+  iput(mip->dev, mip);
+
+  //make . and .. for data block 0
+  dp = (DIR *)buf;
+  dp->inode = inum;
+  strncpy(dp->name, ".", 1);
+  dp->name_len = 1;
+  dp->rec_len = 12;
+
+  cp = buf + 12;
+  dp = (DIR *)cp;
+  dp0>inode = pip->ino;
+  dp->name_len = 2;
+  strncpy(dp->name, "..", 2);
+  dp->rec_len = BLKSIZE - 12;
+
+  //write to disk
+  put_block(pip->dev, bnum, buf);
+
+  //update the parent inode
+  memset(buf, 0, BLKSIZE);
+  neededLen = 4*((8+strlen(child)+3)/4);
+  //check if there is room in the last block in the parents directory
+  bnum = findLast(pip);
+
+}
+
+
+int findLast(MINODE *pip)
+{
+  int buf[256], buf2[256], bnum, i, j;
+
+  //find last used block in the given pip
+  if(pip->INODE.i_block[0] == 0) {return 0;}
+
+  for(i = 0; i<12; i++)
+  {
+    if(pip->INODE.i_block[i] == 0) {return pip->INODE.i_block[i-1];}
+  }
+
+  if(pip->INODE.i_block[12] == 0) { return pip->INODE.i_block[i-1];}
+  get_block(dev, pip>INODE.i_block[12], (char *)buf);
+  for(i = 0; i<256; i++)
+  {
+
+
+  }
+}
+
+//find space for a new inode
+int ialloc(int dev1)
+{
+  int i;
+  char buf[BLKSIZE];
+  //GET INODE BITMAP INTO BUF
+  get_block(dev1, imap, buf);
+
+  for(i = 0; i < ninodes; i++)
+  {
+    if(tst_bit(buf, i) == 0) //test thje bit, looking for a free one.
+    {
+      set_bit(buf, i); //toggle the bit since we found one
+      put_block(dev1, imap, buf); //write the imap block back to the disk after the toggle
+
+      //update free inode count in SUPER and DG on device
+      decFreeInodes(dev1);
+      return (i+1);
+    }
+  }
+  return 0;
+}
+
+//basically the same as ialloc except were allocating spce for a block instead of an inode
+int balloc(int dev1)
+{
+
+  int i;
+  char buf[BLKSIZE];
+  //GET INODE BITMAP INTO BUF
+  get_block(dev1, bmap, buf);
+
+  for(i = 0; i < BLKSIZE; i++)
+  {
+    if(tst_bit(buf, i) == 0) //test thje bit, looking for a free one.
+    {
+      set_bit(buf, i); //toggle the bit since we found one
+      put_block(dev1, bmap, buf); //write the imap block back to the disk after the toggle
+
+      //update free inode count in SUPER and DG on device
+      decFreeInodes(dev1);
+      return (i+1);
+    }
+  }
+  return 0;
+}
+
+int test_bit(char *buf, int i)
+{
+  int byte, offset;
+  byte = i/8;
+  offset = i%8;
+  return (((*(buf+byte))>>offset)&1);
+}
+
+int set_bit(char *buf, int i)
+{
+  int byte, offset;
+  char temp;
+  char *tempBuf;
+  bye = i/8;
+  offset = i%8;
+  tempBuf = (buf + byte);
+  temp |= (1<<offset);
+  *tempBuf = temp;
+  return 1;
+
+}
+
+
+int clr_bit(char *buf, int i)
+{
+  int byte, offset;
+  char temp;
+  char *tempBuf;
+  byte = i/8;
+  offset = i%8;
+  tempBuf = (byte + buf);
+  temp = *tempBuf;
+  temp &= (~(1<<offset));
+  *tempBuf = temp;
+  return 1;
+
+}
 
 
 
+int decFreeInodes(int dev1)
+{
+  char buf[BLKSIZE];
+  get_super(dev, buf);
+  sp = (SUPER *)buf;
+  sp->s_free_inodes_count -=1;
+  put_block(dev, SUPERBLOCK, buf);
+  get_gd(dev, buf);
+  gp = (GD *)buf;
+  gp->bg_free_inodes_count -=1;
+  put_block(dev, GDBLOCK, buf);
+  return 1;
+}
+
+int incFreeInodes(int dev1)
+{
+  char buf[BLKSIZE];
+  get_super(dev, buf);
+  sp = (SUPER *)buf;
+  sp->s_free_inodes_count +=1;
+  put_block(dev, SUPERBLOCK, buf);
+  get_gd(dev, buf);
+  gp = (GD *)buf;
+  gp->bg_free_inodes_count +=1;
+  put_block(dev, GDBLOCK, buf);
+  return 1;
+}
 
 //finds all the data blocks from a pointer to that inode and prints the dir names in the data blocks
 int findBlocks(INODE *ip, int printStat){
@@ -472,8 +714,6 @@ char ** tokenPath(char *path){
 
 
 
-int make_dir(char *pathname){
-}
 
 int rm_dir(char *pathname){
 }
