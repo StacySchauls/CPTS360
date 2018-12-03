@@ -10,6 +10,9 @@ int main(int argc, char *argv[]){
   printf("Dev=%d\tinodeBegin=%d\tbmap=%d\timap=%d\tninodes=%d\n", dev, inodeBegin, bmap, imap, ninodes);
   menu();
   while(1){
+    memset(pathname, 0, 128);
+    memset(parameter, 0, 64);
+    memset(cname,0,64);
     printf("P%d running:\n", running->pid);
     printf("Command_> ");
     fgets(line, 128, stdin);
@@ -32,6 +35,7 @@ int main(int argc, char *argv[]){
         continue;
       }
     }
+
   }
   return 0;
 }

@@ -37,7 +37,9 @@ int mysymlink(char *pathname);
 int myunlink(char *pathname);
 int mychmod(char *pathname);
 int getino(int dev1, char *path);
+int searchByIno(int dev, int ino, INODE *ip, char *temp);
 
+int pwd(MINODE *wd);
 MINODE *iget(int dev1, unsigned int ino);
 int findBlocks(INODE *ip, int printStat);
 int printDirs(int block, int printStat);

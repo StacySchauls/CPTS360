@@ -96,8 +96,9 @@ int get_gd(int dev1, char *buf){
 int ls(char *path){
   int ino;
   MINODE *mip;
-  if(!path || !pathname[0]) { 
-    ino = root->ino;   //if the pathname is null then set ino to root ino
+  if(!path || !pathname[0]) 
+  {
+    ino = running->cwd->ino;   //if the pathname is null then set ino to root ino
   }else { ino = getino(dev, path);} //get the ino from the path
   if(0>= ino){
     printf("Invalid path\n");
@@ -108,6 +109,96 @@ int ls(char *path){
   findBlocks(&(mip->INODE), 0); //use find blocks. this will help us print the valuesin the directory we are ls-ing
   iput(mip->dev, mip); //put it back!
 }
+
+
+/************ CD ************/
+
+int cd(char *pathname){
+  unsigned int ino;
+  MINODE *mip;
+  //check if we use absolue or realative path
+  //
+  if(!pathname || !pathname[0] || (pathname[0] == '/' && !pathname[1] ))
+  {
+    ino = root->ino;
+  }else //else get the ino from the pathname
+  {
+    ino = getino(dev, pathname);
+  }
+
+  if(!ino) //if ino is invalid
+  {
+    printf("Invalid pathname\n");
+    return -1;
+  }
+  mip = iget(dev, ino); //get the minode
+  //verify we are tring to cd into a dir
+  if(!S_ISDIR(mip->INODE.i_mode))
+  {
+    printf("Error: path is not a directory\n");
+    iput(dev, mip); //put the minode back and return
+    return -1;
+  }
+
+      //if we here then it should be adir
+      //put the current minode away
+      iput(dev, running->cwd);
+
+      //set new cwd to the new inode
+      running->cwd = mip;
+      return 0;
+    }
+
+/******* PWD *********/
+
+int do_pwd(char *pathname){
+  printf("cwd = ");
+  pwd(running->cwd);
+  putchar(10);
+}
+
+int pwd(MINODE *wd){
+  int ino = 0;
+  MINODE *next = NULL;
+  char temp[256];
+  if(DEBUG){printf("WD: %d ROOT %d\n", wd->ino, root->ino);}
+  //if we are at the root print only the root
+  if(wd->ino == root->ino)
+  {
+    if(DEBUG){printf("in here\n");}
+    printf("/");
+    return 1;
+  }
+
+
+  //get the parents minode
+  ino = search(dev, "..", &(wd->INODE));
+  if(ino <=0)
+  {
+    printf("Error accesssing inode\n");
+    return -1;
+  }
+
+  next = iget(dev, ino);
+  if(DEBUG){printf("next: %d ROOT %d\n", next->ino, root->ino);}
+  if(!next)
+  {
+    printf("Error. Could not find inode\n");
+    return -1;
+  }
+  pwd(next); //recursively go through each parent and print out their names
+  
+  memset(temp, 0, 256);
+  searchByIno(next->dev, wd->ino, &(next->INODE), temp);
+  printf("%s/", temp);
+  iput(next->dev, next);
+  return 0;
+}
+
+
+
+
+
 
 //finds all the data blocks from a pointer to that inode and prints the dir names in the data blocks
 int findBlocks(INODE *ip, int printStat){
@@ -316,6 +407,45 @@ int search(int dev1, char *str, INODE *ip){
   return 0;
 }
 
+
+//just like search except we are looking for matchin inodes now
+int searchByIno(int dev, int ino, INODE *ip, char *temp)
+{
+
+  int i;
+  char *cp;
+  DIR *dp;
+  char buf[BLKSIZE];
+
+  for(i=0; i<12; i++)
+  {
+
+    if(ip->i_block[i] == 0) {break;}
+
+    get_block(dev, ip->i_block[i], buf);
+    cp = buf;
+    dp = (DIR *)buf;
+    while(cp < buf + BLKSIZE)
+    {
+      if(ino == dp->inode)
+      {
+        strncpy(temp, dp->name, dp->name_len);
+        return 1;
+      }
+      cp+=dp->rec_len;
+      dp = (DIR *)cp;
+    }
+  }
+  return 0;
+
+}
+
+
+
+
+
+
+
 char ** tokenPath(char *path){
   int i;
   char **name;
@@ -340,13 +470,7 @@ char ** tokenPath(char *path){
 
 
 
-int cd(char *pathname){
 
-}
-
-int do_pwd(char *pathname){
-
-}
 
 int make_dir(char *pathname){
 }
