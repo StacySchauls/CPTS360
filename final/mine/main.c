@@ -4,7 +4,10 @@
 int main(int argc, char *argv[]){
   int i, cmd;
   char line[128], cname[64], parameter[64];
-  if(strcmp(argv[2], "-d") == 0) {DEBUG = 1;}
+  if(argc == 2)
+  {
+    if(strcmp(argv[2], "-d") == 0) {DEBUG = 1;}
+  }
   init();
   mount_root(argv[1]);
   printf("Dev=%d\tinodeBegin=%d\tbmap=%d\timap=%d\tninodes=%d\n", dev, inodeBegin, bmap, imap, ninodes);

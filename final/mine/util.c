@@ -233,7 +233,7 @@ int make_dir(char *pathname)
 
   //look to see if the item already exists in the current dir
   ino = search(dev1, child, &(mip->INODE));
-  if(ino <=0)
+  if(ino >0)
   {
     printf("Error. Directory already exists\n");
     iput(mip->dev, mip);
@@ -249,7 +249,7 @@ int make_dir(char *pathname)
 
 int my_mk(MINODE *pip, char child[256])
 {
-  int inum, bnum, idealLen, neededLen, newRec, i j;
+  int inum, bnum, idealLen, neededLen, newRec, i, j;
   MINODE *mip;
   char *cp;
   DIR *prevDP;
@@ -270,14 +270,15 @@ int my_mk(MINODE *pip, char child[256])
   mip->INODE.i_gid = running->gid;
   mip->INODE.i_size = BLKSIZE;
   mip->INODE.i_links_count = 2;
-  mip->INODE.i_atime = mip->INODE.i_ctime = mip->INODE.mtime = time(0L); //update time
-  mip->INODE.mip->dirty = 1;
+  mip->INODE.i_atime = mip->INODE.i_ctime = mip->INODE.i_mtime = time(0L); //update time
+  mip->dirty = 1;
+
   for(i = 0; i < 15; i++)
   {
-    mip->INODE->i_block[i] = 0;
+    mip->INODE.i_block[i] = 0;
   }
 
-  mip->INODE->i_block[0] = bnum;
+  mip->INODE.i_block[0] = bnum;
   iput(mip->dev, mip);
 
   //make . and .. for data block 0
@@ -289,7 +290,7 @@ int my_mk(MINODE *pip, char child[256])
 
   cp = buf + 12;
   dp = (DIR *)cp;
-  dp0>inode = pip->ino;
+  dp->inode = pip->ino;
   dp->name_len = 2;
   strncpy(dp->name, "..", 2);
   dp->rec_len = BLKSIZE - 12;
@@ -302,9 +303,141 @@ int my_mk(MINODE *pip, char child[256])
   neededLen = 4*((8+strlen(child)+3)/4);
   //check if there is room in the last block in the parents directory
   bnum = findLast(pip);
+  get_block(pip->dev, bnum, buf); //get the last block into memory
+  cp = buf;
+  dp = (DIR *)cp;
+  //go to the last entry
+  while((dp->rec_len + cp) < buf + BLKSIZE)
+  {
+    cp += dp->rec_len;
+    dp = (DIR *)cp;
+  }
+
+  idealLen = 4*((8+dp->name_len+3)/4); //gets the ideal length
+  if(dp->rec_len - idealLen >= neededLen) //then we have room to put a new record in
+  {
+    newRec = dp->rec_len - idealLen;
+    dp->rec_len = idealLen;
+    cp += dp->rec_len;
+    dp = (DIR *)cp;
+    dp->inode = inum;
+    dp->name_len = strlen(child);
+    strncpy(dp->name, child, dp->name_len);
+    dp->rec_len = newRec;
+  }else //else there isnt room. so we need to allocate new data block
+  {
+    //use balloc to allocate new block
+    bnum = balloc(pip->dev);
+    dp = (DIR *)buf;
+    dp->inode = inum;
+    dp->name_len = strlen(child);
+    strncpy(dp->name, child, dp->name_len);
+    dp->rec_len = BLKSIZE;
+    //this adds block to the end
+    addLastBlock(pip, bnum);
+  }
+
+  //write block back to disk
+  put_block(pip->dev, bnum, buf);
+  pip->dirty = 1;
+  pip->INODE.i_links_count++;
+  memset(buf, 0 , BLKSIZE);
+  //search for parents ino
+  searchByIno(pip->dev, pip->ino, &running->cwd->INODE, buf);
+  //touch it!
+  touch(buf);
 
 }
+//updates access times, creates file if needed
+int touch(char *name)
+{
+  char buf[BLKSIZE];
+  int ino;
+  MINODE *mip;
+  //get ino for file via name
+  ino = getino(dev, name);
+  if(0 >= ino) //the file doent exist so create it
+  {
+    //CALL CREATE
+    printf("FILE oesnt exist, ccreate it\n");
+    return 1;
+  }
+  mip = iget(dev, ino); //load the inode into memory
+  mip->INODE.i_atime = mip->INODE.i_mtime = mip->INODE.i_ctime = time(0L); //update times
+  mip->dirty = 1;
+  //write back to disk
+  iput(mip->dev, mip);
+  return 1;
+}
 
+
+
+//add a block to the end 
+int addLastBlock(MINODE *pip, int bnumber)
+{
+  int buf[256], buf2[256],i,j,newBlk, newBlk2;
+  //look for the last black in the parents directory
+  //search through direct blocks first
+  for(i=0; i<12; i++)
+  {
+    if(pip->INODE.i_block[i] == 0) {pip->INODE.i_block[i] = bnumber; return 1;}
+  }
+  if(pip->INODE.i_block[12] == 0) //we have to make a direct block
+  {
+    newBlk = balloc(pip->dev); //block alloc
+    pip->INODE.i_block[12] = newBlk;
+    memset(buf,0,256);
+    get_block(pip->dev, newBlk, (char *)buf); //load the new block into the buf
+    buf[0] = bnumber;
+    put_block(pip->dev, newBlk, (char *)buf); //write the block back to memory
+    return 1;
+  }
+  memset(buf,0,256);
+  get_block(pip->dev, pip->INODE.i_block[12], (char *)buf); //get the start of the double indirect. Check if we nee to make a new one
+  for(i = 0; i<256; i++)
+  {
+    if(buf[i] == 0) {buf[i] = bnumber; return 1;}
+  }
+  if(pip->INODE.i_block[13] == 0) //need to make a doble indirect block
+  {
+    newBlk = balloc(pip->dev); //alloc a new block
+    pip->INODE.i_block[13] = newBlk;
+    memset(buf,0,256);
+    get_block(pip->dev, newBlk, (char *)buf);
+    newBlk2 = balloc(pip->dev);
+    buf[0] = newBlk2;
+    //write the block back
+    put_block(pip->dev, newBlk2,(char *)buf);
+    return 1;
+  }
+  memset(buf,0,256);
+  get_block(pip->dev, pip->INODE.i_block[13], (char *)buf);
+  for(i = 0; i<256; i++)
+  {
+    if(buf[i] == 0)
+    {
+      newBlk2 = balloc(pip->dev);
+      buf[i] = newBlk2;
+      //write the block back
+      put_block(pip->dev, pip->INODE.i_block[13],(char *)buf);
+      memset(buf2, 0 , 256);
+      get_block(pip->dev, newBlk2, (char *)buf2);
+      buf2[0] = bnumber;
+      put_block(pip->dev, newBlk2, (char *)buf2);
+      return 1;
+    }
+    memset(buf2, 0, 256);
+    get_block(pip->dev, buf[i], (char *)buf2);
+    for(j = 0; j< 256; j++)
+    {
+      if(buf2[j]== 0){buf2[j] = bnumber; return 1;}
+    }
+  }
+
+  printf("Error. Could not add block to inode.\n");
+  return -1;
+
+}
 
 int findLast(MINODE *pip)
 {
@@ -319,11 +452,15 @@ int findLast(MINODE *pip)
   }
 
   if(pip->INODE.i_block[12] == 0) { return pip->INODE.i_block[i-1];}
-  get_block(dev, pip>INODE.i_block[12], (char *)buf);
+  get_block(dev, pip->INODE.i_block[12], (char *)buf);
   for(i = 0; i<256; i++)
   {
-
-
+    if(buf[i] == 0) {return buf2[j-1];}
+    if(buf[i])
+    {
+      get_block(pip->dev, buf[i], (char *)buf2);
+      if(buf2[j] == 0 ) {return buf2[j-1];}
+    }
   }
 }
 
@@ -337,7 +474,7 @@ int ialloc(int dev1)
 
   for(i = 0; i < ninodes; i++)
   {
-    if(tst_bit(buf, i) == 0) //test thje bit, looking for a free one.
+    if(test_bit(buf, i) == 0) //test thje bit, looking for a free one.
     {
       set_bit(buf, i); //toggle the bit since we found one
       put_block(dev1, imap, buf); //write the imap block back to the disk after the toggle
@@ -361,7 +498,7 @@ int balloc(int dev1)
 
   for(i = 0; i < BLKSIZE; i++)
   {
-    if(tst_bit(buf, i) == 0) //test thje bit, looking for a free one.
+    if(test_bit(buf, i) == 0) //test thje bit, looking for a free one.
     {
       set_bit(buf, i); //toggle the bit since we found one
       put_block(dev1, bmap, buf); //write the imap block back to the disk after the toggle
@@ -387,7 +524,7 @@ int set_bit(char *buf, int i)
   int byte, offset;
   char temp;
   char *tempBuf;
-  bye = i/8;
+  byte = i/8;
   offset = i%8;
   tempBuf = (buf + byte);
   temp |= (1<<offset);

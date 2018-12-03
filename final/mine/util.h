@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <errno.h>
+#include <time.h>
 
 /*Global Variables*/
 int dev, DEBUG;
@@ -14,9 +15,6 @@ MINODE minode[NMINODES];
 MOUNT MountTable[NMOUNT];
 int inodeBegin, bmap, imap, ninodes;
 char pathname[128];
-
-
-
 
 /*Functions*/
 int init();
@@ -36,9 +34,7 @@ int mylink(char *pathname);
 int mysymlink(char *pathname);
 int myunlink(char *pathname);
 int mychmod(char *pathname);
-int getino(int dev1, char *path);
 int searchByIno(int dev, int ino, INODE *ip, char *temp);
-
 int pwd(MINODE *wd);
 MINODE *iget(int dev1, unsigned int ino);
 int findBlocks(INODE *ip, int printStat);
@@ -50,6 +46,17 @@ int search(int dev1, char *str, INODE *ip);
 char **tokenPath(char *path);
 
 
+int my_mk(MINODE *pip, char child[256]);
+int touch(char *name);
+int addLastBlock(MINODE *pip, int bnumber);
+int findLast(MINODE *pip);
+int ialloc(int dev1);
+int balloc(int dev1);
+int test_bit(char *buf, int i);
+int set_bit(char *buf, int i);
+int clr_bit(char *buf, int i);
+int decFreeInodes(int dev1);
+int incFreeInodes(int dev1);
 
 
 
