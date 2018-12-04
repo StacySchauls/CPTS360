@@ -18,6 +18,7 @@ char pathname[128];
 
 /*Functions*/
 int init();
+int quit(char *pathname);
 int mount_root(char *devName);
 int get_block(int dev1, int blk, char *buf);
 int get_super(int dev1, char *buf);
@@ -57,13 +58,20 @@ int set_bit(char *buf, int i);
 int clr_bit(char *buf, int i);
 int decFreeInodes(int dev1);
 int incFreeInodes(int dev1);
+int incFreeBlocks(int dev1);
+int touch(char *name);
+
+
+int rm_dir(char *pathname);
+int rm_child(MINODE *pip, char *child);
+int is_empty(MINODE *mip);
+int idalloc(int dev1, int ino);
+int bdalloc(int dev1, int ino);
 
 
 
 
 
 
-
-
-static char *cmnds[] = { "ls","pwd","cd","mkdir","rmdir","creat","link","symlink","unlink","chmod"};
-static int (*fptr[])(char *) = {(int (*)())ls, do_pwd, cd, make_dir, rm_dir,creat_file,mylink, mysymlink, myunlink, mychmod};
+static char *cmnds[] = { "ls","pwd","cd","mkdir","rmdir","creat","link","symlink","unlink","chmod","quit"};
+static int (*fptr[])(char *) = {(int (*)())ls, do_pwd, cd, make_dir, rm_dir,creat_file,mylink, mysymlink, myunlink, mychmod, quit};

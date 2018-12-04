@@ -32,7 +32,7 @@ int main(int argc, char *argv[]){
     }
 
     //use function pointer to look for command in the list of commands we have.
-    for(i = 0; i < 10; i++){
+    for(i = 0; i <11 ; i++){
       if(strcmp(cname, cmnds[i]) == 0){
         fptr[i](pathname);
         continue;
