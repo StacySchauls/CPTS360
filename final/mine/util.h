@@ -61,7 +61,7 @@ int incFreeInodes(int dev1);
 int incFreeBlocks(int dev1);
 int touch(char *name);
 
-
+int decFreeBlocks(int dev1);
 int rm_dir(char *pathname);
 int rm_child(MINODE *pip, char *child);
 int is_empty(MINODE *mip);
