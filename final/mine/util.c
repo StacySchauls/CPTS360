@@ -57,12 +57,12 @@ void menu(){
 //Returns the requested block in buffer
 int get_block(int dev1, int blk, char *buf)
 {
-    if (-1 == lseek(dev1, (long)(blk*BLKSIZE), 0))
-    {
-        printf("%s\n", strerror(errno));
-        assert(0);
-    }
-    read(dev1, buf, BLKSIZE);
+	if (-1 == lseek(dev1, (long)(blk*BLKSIZE), 0))
+	{
+		printf("%s\n", strerror(errno));
+		assert(0);
+	}
+	read(dev1, buf, BLKSIZE);
 }
 
 
@@ -833,25 +833,25 @@ int findLast(MINODE *pip)
 //find space for a new inode
 int ialloc(int dev1)
 {
-    int i;
-    char buf[BLKSIZE];            // BLKSIZE=block size in bytes
+	int i;
+	char buf[BLKSIZE];            // BLKSIZE=block size in bytes
 
-    // get inode Bitmap into buf[ ]
+	// get inode Bitmap into buf[ ]
 
-    get_block(dev1, imap, buf);       // assume FD, bmap block# = 4
+	get_block(dev1, imap, buf);       // assume FD, bmap block# = 4
 
-    for (i=0; i < ninodes; i++){  // assume you know ninodes
-        if (test_bit(buf, i)==0){    // assume you have tst_bit() function
-        set_bit(buf, i);          // assume you have set_bit() function
-        put_block(dev1, imap, buf);   // write imap block back to disk
+	for (i=0; i < ninodes; i++){  // assume you know ninodes
+		if (test_bit(buf, i)==0){    // assume you have tst_bit() function
+			set_bit(buf, i);          // assume you have set_bit() function
+			put_block(dev1, imap, buf);   // write imap block back to disk
 
-        // update free inode count in SUPER and GD on dev
-        decFreeInodes(dev1);
-				printf("returning %d\n",i+1);       // assume you write this function
-        return (i+1);
-        }
-    }
- return 0;                     // no more FREE inodes
+			// update free inode count in SUPER and GD on dev
+			decFreeInodes(dev1);
+			printf("returning %d\n",i+1);       // assume you write this function
+			return (i+1);
+		}
+	}
+	return 0;                     // no more FREE inodes
 }
 
 
@@ -870,24 +870,24 @@ int idalloc(int dev1, int ino)
 //basically the same as ialloc except were allocating spce for a block instead of an inode
 int balloc(int dev1)
 {
-    int i;
-    char buf[BLKSIZE];            // BLKSIZE=block size in bytes
+	int i;
+	char buf[BLKSIZE];            // BLKSIZE=block size in bytes
 
-    get_block(dev1, bmap, buf);
+	get_block(dev1, bmap, buf);
 
-    for (i=0; i < BLKSIZE; i++){  // assume you know ninodes
-        if (test_bit(buf, i)==0){    // assume you have tst_bit() function
-        set_bit(buf, i);          // assume you have set_bit() function
-        put_block(dev1, bmap, buf);   // write bmap block back to disk
+	for (i=0; i < BLKSIZE; i++){  // assume you know ninodes
+		if (test_bit(buf, i)==0){    // assume you have tst_bit() function
+			set_bit(buf, i);          // assume you have set_bit() function
+			put_block(dev1, bmap, buf);   // write bmap block back to disk
 
-        // update free inode count in SUPER and GD on dev
-        decFreeBlocks(dev1);       // assume you write this function
-        memset(buf, 0, BLKSIZE);
-        put_block(dev1, i+1, buf);
-        return (i+1);
-        }
-    }
- return 0;                     // no more FREE inodes
+			// update free inode count in SUPER and GD on dev
+			decFreeBlocks(dev1);       // assume you write this function
+			memset(buf, 0, BLKSIZE);
+			put_block(dev1, i+1, buf);
+			return (i+1);
+		}
+	}
+	return 0;                     // no more FREE inodes
 }
 
 
@@ -911,54 +911,54 @@ int bdalloc(int dev1, int ino)
 
 int test_bit(char *buf, int i)
 {
-    int byt, offset;
-    byt = i/8;
-    offset = i%8;
-    return (((*(buf+byt))>>offset)&1);
+	int byt, offset;
+	byt = i/8;
+	offset = i%8;
+	return (((*(buf+byt))>>offset)&1);
 }
 
 int set_bit(char *buf, int i)
 {
-    int byt, offset;
-    char temp;
-    char *tempBuf;
-    byt = i/8;
-    offset = i%8;
-    tempBuf = (buf+byt);
-    temp = *tempBuf;
-    temp |= (1<<offset);
-    *tempBuf = temp;
-    return 1;
+	int byt, offset;
+	char temp;
+	char *tempBuf;
+	byt = i/8;
+	offset = i%8;
+	tempBuf = (buf+byt);
+	temp = *tempBuf;
+	temp |= (1<<offset);
+	*tempBuf = temp;
+	return 1;
 }
 
 
 int clr_bit(char *buf, int i)
 {
-    int byt, offset;
-    char temp;
-    char *tempBuf;
-    byt = i/8;
-    offset = i%8;
-    tempBuf = (buf+byt);
-    temp = *tempBuf;
-    temp &= (~(1<<offset));
-    *tempBuf = temp;
-    return 1;
+	int byt, offset;
+	char temp;
+	char *tempBuf;
+	byt = i/8;
+	offset = i%8;
+	tempBuf = (buf+byt);
+	temp = *tempBuf;
+	temp &= (~(1<<offset));
+	*tempBuf = temp;
+	return 1;
 }
 
 
 int decFreeBlocks(int dev1)
 {
-    char buf[BLKSIZE];
-    get_super(dev, buf);
-    sp = (SUPER*)buf;
-    sp->s_free_blocks_count -= 1;
-    put_block(dev1, SUPERBLOCK, buf);
-    get_gd(dev1, buf);
-    gp = (GD*)buf;
-    gp->bg_free_blocks_count -=1;
-    put_block(dev1, GDBLOCK, buf);
-    return 1;
+	char buf[BLKSIZE];
+	get_super(dev, buf);
+	sp = (SUPER*)buf;
+	sp->s_free_blocks_count -= 1;
+	put_block(dev1, SUPERBLOCK, buf);
+	get_gd(dev1, buf);
+	gp = (GD*)buf;
+	gp->bg_free_blocks_count -=1;
+	put_block(dev1, GDBLOCK, buf);
+	return 1;
 }
 
 int decFreeInodes(int dev1)
@@ -1128,14 +1128,14 @@ MINODE *iget(int dev1, unsigned int ino){
 	//search minode[100] to see if inode already exists in array
 	for(i = 0; i < 100; i++)
 	{
-			// If inode is already in array, set mip to point to MINODE in array, increment MINODE's refCount by 1.
-			if(minode[i].refCount > 0 && minode[i].ino == ino)
-			{
-					//printf("MINODE for inode %d already exists, just copying\n", minode[i].ino); //FOR TESTING
-					mip = &minode[i];
-					minode[i].refCount++;
-					return mip;
-			}
+		// If inode is already in array, set mip to point to MINODE in array, increment MINODE's refCount by 1.
+		if(minode[i].refCount > 0 && minode[i].ino == ino)
+		{
+			//printf("MINODE for inode %d already exists, just copying\n", minode[i].ino); //FOR TESTING
+			mip = &minode[i];
+			minode[i].refCount++;
+			return mip;
+		}
 	}
 
 	//if we are here then the inode does not exists. we need to put inode from disk into the minode array
@@ -1144,8 +1144,8 @@ MINODE *iget(int dev1, unsigned int ino){
 	while(minode[i].refCount > 0 && i < 100) { i++;}
 	if(i == 100)
 	{
-			printf("Error: NO SPACE IN MINODE ARRAY\n");
-			return 0;
+		printf("Error: NO SPACE IN MINODE ARRAY\n");
+		return 0;
 	}
 	blk = (ino-1)/8 + inodeBegin;
 	offset = (ino-1)%8;
@@ -1159,7 +1159,7 @@ MINODE *iget(int dev1, unsigned int ino){
 	minode[i].mounted = 0;
 	minode[i].mountptr = NULL;
 	return &minode[i];
-	}
+}
 
 int iput(int dev1, MINODE *mip){
 	char buf[BLKSIZE];
@@ -1184,9 +1184,9 @@ int iput(int dev1, MINODE *mip){
 //writes a block to the disk
 int put_block(int dev, int blk, char *buf)
 {
-    if (-1 == lseek(dev, (long)(blk*BLKSIZE), 0)){ assert(0);}
-        write(dev, buf, BLKSIZE);
-        return 1;
+	if (-1 == lseek(dev, (long)(blk*BLKSIZE), 0)){ assert(0);}
+	write(dev, buf, BLKSIZE);
+	return 1;
 }
 
 int search(int dev1, char *str, INODE *ip){
@@ -1307,17 +1307,270 @@ int quit(char *pathname)
 	exit(0);
 }
 
-
-
-
-
 int mylink(char *pathname){
+	char old[256], newFile[256], parent[256], child[256], buf[BLKSIZE], temp[256];
+	int ino, ino2, bnumber, needLen, idealLen, newRec;
+	MINODE *mip, *mip2;
+	char *cp;
+	DIR *dp;
+memset(child,0,256);
+memset(parent,0,256);
+	if (0 >= split_paths(pathname, old, newFile)) {return -1;} //error splitting the paths into two files
+		if(DEBUG){printf("newFile: %s\n",newFile);}
+	//if here, we split successfully. Get the ino for the old ifle then load it into memory
+	ino = getino(dev, old);
+	if(ino <= 0){return -1;} //error getting ino
+	mip = iget(dev, ino);
+	//make sure its a reg file
+	if(!S_ISREG(mip->INODE.i_mode))
+	{
+		printf("Error. Not a reg file.\n");
+		iput(mip->dev, mip);
+		return -1;
+	}
+
+	//get parent and child of the path
+/*	strncpy(newFile, temp, 256);
+	strncpy(parent, dirname(temp), 256);
+	strncpy(child, basename(newFile), 256);
+*/
+
+myDirname(newFile, parent);
+myBasename(newFile, child);
+	if(DEBUG){printf("parent: %s\n",parent);}
+		if(DEBUG){printf("child: %s\n",child);}
+
+	ino2 = getino(mip->dev, parent);
+	if(0 >= ino2)
+	{
+		iput(mip->dev, mip);
+		return -1;
+	}
+
+	mip2 = iget(mip->dev, ino2);
+	//check that its a dir
+	if(!S_ISDIR(mip2->INODE.i_mode))
+	{
+		printf("Error. Not a directory.\n");
+		iput(mip->dev, mip);
+		iput(mip2->dev, mip2);
+		return -1;
+	}
+
+	//check that the child doesnt already exist
+		if(DEBUG){printf("child: %s\n",child);}
+
+	ino2 = search(mip2->dev, child, &(mip2->INODE));
+		if(DEBUG){printf("ino2: %d\n",ino2);}
+	if(ino2 > 0)
+	{
+		printf("Error. File already exists\n");
+		iput(mip->dev, mip);
+		iput(mip2->dev, mip2);
+		return -1;
+	}
+
+	//put the name into the parents block.
+	memset(buf, 0, BLKSIZE);
+	needLen = 4*((8+strlen(child) +3)/4);
+	bnumber = findLast(mip2);
+	//chck if there is room in the last block
+	get_block(mip2->dev, bnumber, buf);
+	dp = (DIR *)buf;
+	cp = buf;
+
+	while((dp->rec_len + cp) < buf + BLKSIZE)
+	{
+		cp += dp->rec_len;
+		dp = (DIR *)cp;
+	}
+
+	idealLen = 4*((8+dp->name_len + 3)/4);
+	if(dp->rec_len - idealLen >= needLen) //there is room in the block
+	{
+		newRec = dp->rec_len - idealLen;
+		dp->rec_len = idealLen;
+		cp += dp->rec_len;
+		dp = (DIR *)cp;
+		dp->inode = ino;
+		dp->name_len = strlen(child);
+		strncpy(dp->name, child, dp->name_len);
+		if(DEBUG){printf("New name: %s\n",dp->name);}
+		dp->rec_len = newRec;
+	}
+	else //need to allocate a new data block
+	{
+		bnumber = balloc(mip2->dev);
+		dp = (DIR *)buf;
+		dp->inode = ino;
+		dp->name_len = strlen(child);
+		strncpy(dp->name, child, dp->name_len);
+		if(DEBUG){printf("New name: %s\n",dp->name);}
+		dp->rec_len = BLKSIZE;
+		addLastBlock(mip2, bnumber);
+	}
+
+	//write everything back to disk
+	put_block(mip2->dev, bnumber, buf);
+	mip->dirty = 1;
+	mip->INODE.i_links_count++;
+	memset(buf,0,BLKSIZE);
+	searchByIno(mip2->dev, mip2->ino, &running->cwd->INODE,buf);
+	iput(mip->dev, mip);
+	iput(mip2->dev, mip2);
+	return 1;
+}
+
+
+int split_paths(char *original, char *path1, char *path2)
+{
+	char *temp;
+	temp = strtok(original, " ");
+	strcpy(path1, temp);
+	temp = strtok(NULL, " ");
+	if(temp == NULL)
+	{
+		printf("Error. No second path given.\n");
+		return -1;
+	}
+	strcpy(path2, temp);
+	return 1;
+}
+
+int myDirname(char *pathname, char buf[256])
+{
+    int i = 0;
+    memset(buf, 0, 256);
+    strcpy(buf, pathname);
+    while(buf[i]) { i++; }
+    while(i >= 0)
+    {
+        if(buf[i] == '/')
+        {
+            buf[i+1] = 0;
+            printf("parent = %s\n", buf); //FOR TESTING
+            return 1;
+        }
+        i--;
+    }
+    buf[0] = 0;
+    return 1;
+}
+
+int myBasename(char *pathname, char *buf)
+{
+    int i = 0, j = 0;
+    if(!pathname[0]) {return -1;}
+    i = strlen(pathname);
+    while(i >= 0 && pathname[i] != '/') { i--; }
+    if(pathname[i] == '/')
+    {
+        i++;
+        while(pathname[i]) { buf[j++] = pathname[i++];}
+        buf[j] = 0;
+        return 1;
+    }
+    else { strncpy(buf, pathname, 256);}
+    return 1;
 }
 
 int mysymlink(char *pathname){
 }
 
 int myunlink(char *pathname){
+	char oldFile[256], parent[256], child[256], buf[BLKSIZE];
+    int ino, ino2, bnumber, needLen, idealLen, newRec;
+    MINODE *mip, *mip2;
+    char *cp;
+    DIR *dp;
+
+	//check the file exists
+	ino = getino(dev, pathname);
+	if(ino <= 0)
+	{
+		printf("Error. File does not exist.\n");
+		return -1;
+	}
+	//load the inode
+	mip = iget(dev, ino);
+
+	//check its a regular file
+	if(!S_ISREG(mip->INODE.i_mode))
+	{
+		printf("Error. Not a regular file.\n");
+		iput(mip->dev, mip);
+		return -1;
+	}
+	//dec the link count
+	mip->INODE.i_links_count--;
+	//make suure it was the only one using it. if it wasnt then we cant really remove it
+	if(mip->INODE.i_links_count <= 0)
+	{
+		my_truncate(mip);
+	}
+	myDirname(pathname, parent);
+	myBasename(pathname, child);
+	ino2 = getino(mip->dev, parent);
+	if(ino2 <= 0) {return -1;}
+	mip2 = iget(dev, ino2);
+	rm_child(mip2, child);
+	iput(mip->dev, mip);
+	iput(mip2->dev, mip2);
+	return 1;
+}
+//function to dealocate all the data blocks of the inode
+int my_truncate(MINODE *mip)
+{
+	int i, j;
+	char buf[256], buf2[26];
+	if(!S_ISLNK(mip->INODE.i_mode))
+	{
+		//dealloc the direct blocks
+		for(i = 0; i < 12; i++)
+		{
+			if(mip->INODE.i_block[i] != 0)
+			{
+				bdalloc(mip->dev, mip->INODE.i_block[i]);
+			}
+		}
+		if(mip->INODE.i_block[12] != 0) //if the 12 isnt null, dealloc the indirect blocks
+		{
+			memset(buf,0,256);
+			get_block(mip->dev, mip->INODE.i_block[12], (char *)buf);
+			for(i = 0; i < 256; i++)
+			{
+				if(buf[i] != 0) 
+				{
+					bdalloc(mip->dev, buf[i]);
+				}
+			}
+			if(mip->INODE.i_block[13] != 0) //if the 13th isnt null dealloc the double indirect blocks
+			{
+				memset(buf,0,256);
+				get_block(mip->dev, mip->INODE.i_block[13], (char *)buf);
+				for(i = 0; i < 256; i++)
+				{
+					if(buf[i] != 0)
+					{
+						memset(buf2, 0, 256);
+						get_block(mip->dev, buf[i],(char *) buf2);
+						for(j = 0; j < 256; j++)
+						{
+							if(buf2[j] != 0)
+							{
+								bdalloc(mip->dev, buf2[j]);
+							}
+						}
+						bdalloc(mip->dev, buf[i]);
+					}
+				}
+				bdalloc(mip->dev, mip->INODE.i_block[13]);
+			}
+		}
+		idalloc(mip->dev, mip->ino); //dealloc the inode now
+		return 1;
+	}
+
 }
 
 int mychmod(char *pathname){

@@ -67,6 +67,10 @@ int rm_child(MINODE *pip, char *child);
 int is_empty(MINODE *mip);
 int idalloc(int dev1, int ino);
 int bdalloc(int dev1, int ino);
+int split_paths(char *original, char *path1, char *path2);
+int myBasename(char *pathname, char *buf);
+int myDirname(char *pathname, char buf[256]);
+int my_truncate(MINODE *mip);
 
 
 
