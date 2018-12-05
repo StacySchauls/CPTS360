@@ -3,7 +3,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <time.h>
-
+#include <sys/types.h>
+#include <unistd.h>
 
 //Global Variables
 int dev;
@@ -70,15 +71,15 @@ int my_rmdir(char* pathname);
 int rm_child(MINODE *pip, char *child);
 int is_empty(MINODE *mip);
 int split_paths(char* original, char* path1, char* path2);
-int link(char* pathname);
-int unlink(char* pathname);
+int my_link(char* pathname);
+int my_unlink(char* pathname);
 int rm(MINODE *mip);
-int symlink(char *pathname);
-int truncate(MINODE *mip);
+int my_symlink(char *pathname);
+int my_truncate(MINODE *mip);
 int findparent(char *pathn);
 void printChild(int devicename, MINODE *mp);
 void printFile(MINODE *mip, char *namebuf);
 int do_ls(char *path);
 
-static int (*fptr[])(char*) = {(int (*)())do_ls,  cd, do_pwd,  make_dir, my_chmod, creat_file, my_rmdir, link, unlink, symlink, touch, quit};
+static int (*fptr[])(char*) = {(int (*)())do_ls,  cd, do_pwd,  make_dir, my_chmod, creat_file, my_rmdir, my_link,my_unlink, my_symlink, touch, quit};
 static char *cmnds[] = {"ls", "cd", "pwd",  "mkdir", "chmod",  "creat", "rmdir", "link", "unlink", "symlink", "touch",   "quit"};
