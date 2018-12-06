@@ -27,6 +27,12 @@ int menu(char* pathanme)
   printf(" ls cd pwd mkdir chmod creat rmdir link unlink symlink touch quit \n");
 
   printf("******************************************\n");
+
+  printf("********* Level 2 Commands************\n");
+
+  printf("open write read close \n");
+
+  printf("******************************************\n");
 }
 
 
@@ -1777,4 +1783,270 @@ int findparent(char *pathn)
     i++;
   }
   return 0;
+}
+
+
+
+int fileOpen(char *pathname)
+{
+  char pathToFile[256], cFlags[256];
+  int flags, ino, i;
+  MINODE *mip;
+  OFT *oftp; //ope file table
+
+  //get the file anme and the open mode
+  if(split_paths(pathname, pathToFile, cFlags) <= 0) { return -1; }
+  //flags = atoi(cFlags);
+  //printf("cFlags = %s, flags = %d\n",cFlags, (int)cFlags);
+  if(strcmp("R", cFlags) == 0)
+  {
+    flags = 0;
+  }
+  if(strcmp("W", cFlags) == 0)
+  {
+    flags = 1;
+  }
+
+  if(strcmp("RW", cFlags) == 0)
+  {
+    flags = 2;
+  }
+
+  if(strcmp("APPEND", cFlags) == 0)
+  {
+    flags = 3;
+  }
+  //get the minode of the file
+  ino = getino(dev, pathToFile);
+  if( 0 >= ino)
+  {
+    //if file doesnt exist create it
+    creat_file(pathToFile);
+  }
+  ino = getino(dev,pathToFile);
+  if( 0 >= ino)
+  {
+    printf("Error opening file.\n");
+    return -1;
+  }
+  //get the inode into memory
+  mip = iget(dev, ino);
+  //check that its a regular file
+  if(!S_ISREG(mip->INODE.i_mode))
+  {
+    printf("Error. Not a regular file.\n");
+    iput(mip->dev, mip);
+    return -1;
+  }
+
+    //make sure file isnt in use
+    for(i = 0; i < 10; i++)
+    {
+      if(running->fd[i] != NULL)
+      {
+        if(running->fd[i]->inodeptr == mip)
+        {
+          if(running->fd[i]->mode != 0 || flags != 0)
+          {
+            printf("Error. File in use.\n");
+            iput(mip->dev, mip);
+            return -1;
+          }
+        }
+      }
+    }
+
+    //allocate a spot in the open file table
+    oftp = (OFT *)malloc(sizeof(OFT));
+    oftp->mode = flags;
+    printf("Flag is: %d\n");
+    oftp->refCount = 1;
+    oftp->inodeptr = mip;
+//set offset based off R W RW APPEND
+    switch(flags)
+    {
+      case 0: oftp->offset = 0;
+              printf("File opened for read-only\n");
+              break;
+      case 1: my_truncate(mip);
+              printf("File open for write-only\n");
+              oftp->offset = 0;
+              break;
+      case 2: oftp->offset = 0;
+              printf("File open for read/write\n");
+              break;
+      case 3: oftp->offset = mip->INODE.i_size;
+              printf("Open for Append\n");
+              break;
+      default: printf("Error. Flag is invalid. R W RW\n");
+               iput(mip->dev, mip);
+               free(oftp);
+               return -1;
+               break;
+    }
+
+  //check that ther actually is room in fd to open the file
+  i = 0;
+  while(running->fd[i] != NULL && i < 10){ i++; }
+  if(i == 10) //fd isfull
+  {
+    printf("Error. No room to open the file. Close another first.\n");
+    iput(mip->dev, mip);
+    free(oftp);
+    return -1;
+  }
+  //else its free. so put it in there
+  printf("File fd is %d\n",i);
+  running->fd[i] = oftp;
+  if(flags != 0) {mip->dirty = 1;}
+  return i;
+}
+
+int fileClose(char *path)
+{
+  MINODE *mip;
+  OFT *oftp;
+  int fd;
+  if(!path[0])
+  {
+    printf("Error: No file desciptor given\n");
+    return -1;
+  }
+
+  fd = atoi(path);
+  printf("fd is: %d\n", fd);
+  if(fd < 0 || fd > 9)
+  {
+    printf("Error. Not a valid fd\n");
+    return -1;
+  }
+
+  //check the descriptor is in use
+  if(running->fd[fd] == NULL)
+  {
+    printf("Error. file not currently open.\n");
+    return -1;
+  }
+  //close everything.
+  oftp = running->fd[fd];
+  running->fd[fd] = 0;
+  oftp->refCount--;
+  if(oftp->refCount > 0) {return -1;} //there is someone else using it
+  mip = oftp->inodeptr;
+  //write the inode back to the disk
+  iput(mip->dev, mip);
+  free(oftp);
+  printf("\nFile closed successfullly.\n");
+  return 1;
+}
+
+int fileWrite(char *pathname)
+{
+  int fd;
+  char writeMe[BLKSIZE];
+  fd = atoi(pathname);
+  if(fd < 0 || fd > 9)
+  {
+    printf("Error. Not a valid fd\n");
+    return -1;
+  }
+
+  //check the descriptor is in use
+  if(running->fd[fd] == NULL)
+  {
+    printf("Error. file not currently open.\n");
+    return -1;
+  }
+  //check that we are able to write to it
+  if(running->fd[fd]->mode == 0)
+  {
+    printf("Error. File is in read-only mode\n");
+    return -1;
+  }
+
+  printf("What would you like to write?\n");
+  fgets(writeMe, BLKSIZE, stdin);
+  writeMe[strlen(writeMe) -1] = 0;
+  if(writeMe[0] == 0)
+  {
+    return 0;
+  }
+  return myWrite(fd, writeMe, strlen(writeMe));
+}
+
+int myWrite(int fd, char *buf, int nbytes)
+{
+  int count, lblk, start, blk, dblk, remain;
+  int ibuf[256], dbuf[256];
+  char writeBuf[BLKSIZE], *cp, *cq;
+  count = 0;
+  while(nbytes)
+  {
+    //comoute logical block
+    lblk = running->fd[fd]->offset / BLKSIZE;
+    start = running->fd[fd]->offset % BLKSIZE;
+    
+    //convert logical block ot physical block
+    if(lblk < 12 ) //direct blocks
+    {
+      blk = running->fd[fd]->inodeptr->INODE.i_block[lblk];
+    }
+    else if(12 <= lblk < 12 + 256) //indirect blocks
+    {
+      //load the block 12 inot ibuf
+      memset(ibuf,0,256);
+      get_block(running->fd[fd]->inodeptr->dev, running->fd[fd]->inodeptr->INODE.i_block[12], (char *)ibuf);
+      blk = ibuf[lblk - 12];
+    }
+    else //double indirect blocks
+    {
+      memset(ibuf, 0, 256);
+      get_block(running->fd[fd]->inodeptr->dev, running->fd[fd]->inodeptr->INODE.i_block[13], (char  *)dbuf);
+      lblk -= (12 + 256);
+      dblk = dbuf[lblk / 256];
+      get_block(running->fd[fd]->inodeptr->dev, dblk, (char *)dbuf);
+      blk = dbuf[lblk % 256];
+    }
+
+
+
+    memset(writeBuf,0,BLKSIZE);
+    //read the blk we got into the write buffre
+    get_block(running->fd[fd]->inodeptr->dev, blk, writeBuf);
+    //init the cp and the remaining
+    cp = writeBuf + start;
+    remain = BLKSIZE - start;
+
+
+    if(remain < nbytes) //copy remain
+    {
+      strncpy(cp, cq, remain); //copies all at once, as opposed to one at a time.
+      count += remain;
+      nbytes -= remain;
+      running->fd[fd]->offset += remain;
+      //checkc that the ofset is within bounds
+      if(running->fd[fd]->offset > running->fd[fd]->inodeptr->INODE.i_size)
+      {
+        running->fd[fd]->inodeptr->INODE.i_size += remain;
+      }
+      remain -= remain;
+    }
+    else //copy nbytes
+    {
+      strncpy(cp, cq, nbytes);
+      remain -= nbytes;
+      count += nbytes;
+      running->fd[fd]->offset += nbytes;
+      //again  check that we are within bounds
+      if(running->fd[fd]->offset > running->fd[fd]->inodeptr->INODE.i_size)
+      {
+        running->fd[fd]->inodeptr->INODE.i_size += nbytes;
+      }
+      nbytes -= nbytes;
+    }
+    //write it back
+    put_block(running->fd[fd]->inodeptr->dev, blk, writeBuf);
+    running->fd[fd]->inodeptr->dirty = 1;
+    printf("Wrote %d chars into file.\n", count);
+  }
 }

@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
             strcat(pathname, parameter);
         }
         //printf("Pathname = %s\n", pathname);
-        for(i = 0; i < 13; i++)
+        for(i = 0; i < 15; i++)
         {
             //look for the command in our list of commands, then run itvia the funciton pointer
             if(strcmp(cmnds[i], cname) == 0)

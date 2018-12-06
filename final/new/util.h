@@ -80,6 +80,12 @@ int findparent(char *pathn);
 void printChild(int devicename, MINODE *mp);
 void printFile(MINODE *mip, char *namebuf);
 int do_ls(char *path);
+int fileOpen(char *pathname);
 
-static int (*fptr[])(char*) = {(int (*)())do_ls,  cd, do_pwd,  make_dir, my_chmod, creat_file, my_rmdir, my_link,my_unlink, my_symlink, touch, quit};
-static char *cmnds[] = {"ls", "cd", "pwd",  "mkdir", "chmod",  "creat", "rmdir", "link", "unlink", "symlink", "touch",   "quit"};
+int fileClose(char *path);
+int fileWrite(char *pathname);
+int myWrite(int fd, char *buf, int nbytes);
+
+
+static int (*fptr[])(char*) = {(int (*)())do_ls,  cd, do_pwd,  make_dir, my_chmod, creat_file, my_rmdir, my_link,my_unlink, my_symlink, touch,fileOpen,fileClose,fileWrite, quit};
+static char *cmnds[] = {"ls", "cd", "pwd",  "mkdir", "chmod",  "creat", "rmdir", "link", "unlink", "symlink", "touch", "open","close","write", "quit"};

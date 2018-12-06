@@ -23,7 +23,7 @@ int init()
 int menu(char* pathanme)
 {
     printf("******************************************\n");
-    printf(" ls cd pwd quit \n");
+    printf(" ls cd pwd mkdir creat link unlink syymlink rmdir quit \n");
     /*printf("ls ll cd pwd stat mkdir chmod chown chgrp\n");
     printf("creat rmdir link unlink symlink touch open\n");
     printf("close lseek pfd read cat write cp mv quit \n");
@@ -835,16 +835,17 @@ int make_dir(char *pathname)
     strcpy(origPathname, pathname);
     if(pathname[0] == '/') { dev1 = root->dev; }
     else { dev1 = running->cwd->dev; }
-    
+    //get the dirname and the basename of the path
     myDirname(pathname, parent);
     myBasename(origPathname, child);
-
+  //get the ino. Check if valid or not
     ino = getino(dev1, parent);
     if(ino <= 0)
     {
         printf("ERROR: INVALID PATHNAME\n");
         return -1;
     }
+    //get the minode. Check if its a dir or not
     mip = iget(dev1, ino);
     if(!S_ISDIR(mip->INODE.i_mode))
     {
@@ -852,6 +853,7 @@ int make_dir(char *pathname)
         iput(dev1, mip);
         return -1;
     }
+    //use the search and check if the dir already exists
     ino = search(dev1, child, &(mip->INODE));
     if(ino > 0)
     {
@@ -860,6 +862,7 @@ int make_dir(char *pathname)
         return -1;
     }
     //printf("Going into the mkdir function\n"); //FOR TESTING
+   //now actually make the directory
     r = my_mkdir(mip, child);
     iput(mip->dev, mip);
     return r;
@@ -881,7 +884,7 @@ int my_mkdir(MINODE *pip, char child[256])
     mip = iget(pip->dev, inumber);
 
     //Write contents into inode for Directory entry
-    mip->INODE.i_mode = 0x41ED;
+    mip->INODE.i_mode = 0x41ED; //directory
     mip->INODE.i_uid = running->uid;
     mip->INODE.i_gid = running->gid;
     mip->INODE.i_size = BLKSIZE;
@@ -913,7 +916,7 @@ int my_mkdir(MINODE *pip, char child[256])
 
     // Put name into parents directory
     memset(buf, 0, BLKSIZE);
-    needLen = 4*((8+strlen(child)+3)/4);
+    needLen = 4*((8+strlen(child)+3)/4);//how much room we need
     bnumber = findLastBlock(pip);
     //Check if rooom in last block in parents directory
     get_block(pip->dev, bnumber, buf);
@@ -925,7 +928,7 @@ int my_mkdir(MINODE *pip, char child[256])
         cp += dp->rec_len;
         dp = (DIR*)cp;
     }
-    idealLen = 4*((8+dp->name_len+3)/4);
+    idealLen = 4*((8+dp->name_len+3)/4);//get the ideal length
     if(dp->rec_len - idealLen >= needLen) //There is room in this block
     {
         //printf("There is room in this block\n"); //FOR TESTING
@@ -958,7 +961,7 @@ int my_mkdir(MINODE *pip, char child[256])
     touch(buf);
     return 1;
 }
-
+//get the last block in an minode
 int findLastBlock(MINODE *pip)
 {
     int buf[256];
@@ -981,7 +984,7 @@ int findLastBlock(MINODE *pip)
             if(buf[i] == 0) {return buf[i-1];}
     }
     if(pip->INODE.i_block[13] == 0) {return buf[i-1];}
-    //Print dirs in double indirect blocks
+    //check double indirect blocks
     memset(buf, 0, 256);
     get_block(pip->dev, pip->INODE.i_block[13], (char*)buf);
     for(i = 0; i < 256; i++)
@@ -997,7 +1000,7 @@ int findLastBlock(MINODE *pip)
             }
     }
 }
-
+//add a block at the end
 int addLastBlock(MINODE *pip, int bnumber)
 {
     int buf[256];
@@ -1010,7 +1013,7 @@ int addLastBlock(MINODE *pip, int bnumber)
     }
     if(pip->INODE.i_block[12] == 0) //Have to make indirect block
     {
-        newBlk = balloc(pip->dev);
+        newBlk = balloc(pip->dev);//block alloc
         pip->INODE.i_block[12] = newBlk;
         memset(buf, 0, 256);
         get_block(pip->dev, newBlk, (char*)buf);
@@ -1025,7 +1028,7 @@ int addLastBlock(MINODE *pip, int bnumber)
             if(buf[i] == 0) {buf[i] = bnumber; return 1;}
     }
     if(pip->INODE.i_block[13] == 0) //Make double indirect block
-    {   
+    {
         newBlk = balloc(pip->dev);
         pip->INODE.i_block[13] = newBlk;
         memset(buf, 0, 256);
@@ -1070,7 +1073,7 @@ int touch (char* name)
     char buf[1024];
     int ino;
     MINODE *mip;
-    
+
     ino = getino(dev, name);
     if(ino <= 0)
     {
@@ -1093,15 +1096,15 @@ int my_chmod(char* pathname)
     MINODE* mip;
 
     if(split_paths(pathname, nMode, path) <= 0) { return -1; }
-    newMode = strtoul(nMode, NULL, 8);
-    ino = getino(dev, path);
+    newMode = strtoul(nMode, NULL, 8); //converts string to unisnged long
+    ino = getino(dev, path);//get ino of the path
     if(ino <= 0)
     {
         printf("ERROR: INVALID PATHNAME\n");
         return -1;
     }
     mip = iget(dev, ino);
-    i = ~0x1FF;
+    i = ~0x1FF;//change the mode
     mip->INODE.i_mode &= i;
     mip->INODE.i_mode |= newMode;
     mip->dirty = 1;
@@ -1167,7 +1170,7 @@ int creat_file(char* pathname)
 
     if(pathname[0] == '/') { dev1 = root->dev;}
     else { dev1 = running->cwd->dev; }
-    
+
     myDirname(pathname, parent);
     myBasename(pathname, child);
 
@@ -1210,7 +1213,7 @@ int my_creat(MINODE *pip, char child[256])
     mip = iget(pip->dev, inumber);
 
     //Write contents into inode for Directory entry
-    mip->INODE.i_mode = 0x81A4;
+    mip->INODE.i_mode = 0x81A4;//file mode
     mip->INODE.i_uid = running->uid;
     mip->INODE.i_gid = running->gid;
     mip->INODE.i_size = 0;
@@ -1225,7 +1228,7 @@ int my_creat(MINODE *pip, char child[256])
     iput(mip->dev, mip);
     // Put name into parents directory
     memset(buf, 0, BLKSIZE);
-    needLen = 4*((8+strlen(child)+3)/4);
+    needLen = 4*((8+strlen(child)+3)/4);//needed length
     bnumber = findLastBlock(pip);
     //Check if rooom in last block in parents directory
     get_block(pip->dev, bnumber, buf);
@@ -1237,10 +1240,10 @@ int my_creat(MINODE *pip, char child[256])
         cp += dp->rec_len;
         dp = (DIR*)cp;
     }
-    idealLen = 4*((8+dp->name_len+3)/4);
+    idealLen = 4*((8+dp->name_len+3)/4);//ideal length
     if(dp->rec_len - idealLen >= needLen) //There is room in this block
     {
-        newRec = dp->rec_len - idealLen;
+        newRec = dp->rec_len - idealLen;//new rec kength
         dp->rec_len = idealLen;
         cp += dp->rec_len;
         dp = (DIR*)cp;
@@ -1321,10 +1324,10 @@ int my_rmdir(char *pathname)
     {
         if(mip->INODE.i_block[i] != 0)
         {
-            bdalloc(mip->dev, mip->INODE.i_block[i]);
+            bdalloc(mip->dev, mip->INODE.i_block[i]);//dealloc the blocks
         }
     }
-    idalloc(mip->dev, mip->ino);
+    idalloc(mip->dev, mip->ino);//now dealloc the ino
 
     myDirname(origPathname, parent);
     myBasename(origPathname, child);
