@@ -30,7 +30,7 @@ int menu(char* pathanme)
 
   printf("********* Level 2 Commands************\n");
 
-  printf("open write read close \n");
+  printf("open write close \n");
 
   printf("******************************************\n");
 }

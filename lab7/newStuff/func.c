@@ -21,9 +21,9 @@ int  fd, dev,iblock;
 int  nblocks, ninodes, bmap, imap, inode_start,numTokens;
 char line[256], cmd[32], pathname[256], buf[256];
 char *rootDev = "mydisk";
-char *cmdList[] = {"mkdir", "cd", "pwd", "ls", "mount", "umount", "creat", "rmdir",
-  "rm", "open", "close", "read", "write", "cat", "cp", "mv", "pfd", "lseek",
-  "rewind", "stat", "pm", "menu", "access", "chmod", "chown", "cs", "fork",
+char *cmdList[] = {"mkdir", "cd", "pwd", "ls", "mount", "umount", "creat", "rmdir", 
+  "rm", "open", "close", "read", "write", "cat", "cp", "mv", "pfd", "lseek", 
+  "rewind", "stat", "pm", "menu", "access", "chmod", "chown", "cs", "fork", 
   "ps", "kill", "quit", "touch", "sync", "link", "unlink", "symlink"};
 //func fpointer[] = {ls_file};
 int MAXTOKENSIZE = 64;
@@ -55,7 +55,7 @@ int init(){
 int mount_root(){
   if(DEBUG){
     printf("in mount dev is: %d\n",dev);
-  }
+  } 
   //get the disk
   //  printf("Enter name for disk to open (Hit enter for default \'mydisk\'\n");
   // mygets(line,sizeof(line));
@@ -95,11 +95,11 @@ int mount_root(){
   //get root inode!
   if(DEBUG){
     printf("before iget dev is: %d\n",dev);
-  }
+  } 
   root = iget(dev,2);
   if(DEBUG){
     printf("after dev is: %d\n",dev);
-  }
+  } 
   if(DEBUG)
     printf("root ino is: %d\n", root->ino);
 
@@ -146,7 +146,7 @@ MINODE *iget(int num, int ino){
 
   if(DEBUG){
     printf("in iget dev is: %d\n",dev);
-  }
+  } 
   if(DEBUG)
     printf(RED"IN IGET\n"RESET);
   //search through the list of minodes we have. look for the given inode;
@@ -218,7 +218,6 @@ int findCmd(char *command)
 }
 
 /********* ls ***********/
-
 
 int ls(char *pathname){
   int inode, i, j, dev;
@@ -304,11 +303,217 @@ int ls(char *pathname){
 
 
 
+
+
+int statMe(MINODE *mp, char *pathname){
+  char name[128];
+  int ino, dev;
+  INODE *ip;
+
+  if(DEBUG){
+    printf("in statme\n");
+  }
+
+  if(strlen(pathname) == 0){
+    mp = running->cwd;
+    ip = &mp->INODE;
+  }else{
+    ino = getino(pathname);
+
+    if(!ino){
+      if(DEBUG){
+        printf("could not stat?!\n");
+
+      }
+      return 0;
+    }
+    dev = running->cwd->dev;
+    mp = iget(dev, ino);
+    ip = &mp->INODE;
+
+    if(DEBUG){
+      printf("could not stat?!\n");
+    }
+    strcpy(name, pathname);
+    basename(name);
+  }
+
+
+  printf("File: \'%s\'\n" RESET, name);
+  printf("Size: %d\tMode: %o\n" RESET, ip->i_size, ip->i_mode);
+  printf("Device: %d\tInode: %d\tLinks: \n" RESET, mp->dev, mp->ino, ip->i_links_count);
+  printf("Access Time: %d\n" RESET, ip->i_atime);
+  printf("Modify Time: %d\n" RESET, ip->i_mtime);
+  printf("Change Time: %d\n" RESET, ip->i_ctime);
+
+
+  return 0;
+}
+
+int ls2(char *pathname){
+  MINODE *mp;
+  INODE *inode;
+  int i, dev, inodeNum, ino;
+  DIR *dp;
+  char buf[BLKSIZE], *cp;
+  if(DEBUG)
+    printf(RED"In ls2\n");
+
+  //check for a given path, if none ten its the cwd
+  if(strlen(pathname) == 0){
+    if(DEBUG){
+      printf("mp = running->cwd");
+    }
+    mp = running->cwd;
+  }else{
+    //else we need to get the mp from the given path.
+    ino = getino(pathname);
+    mp = iget(fd, ino); //gets the minode for mp.
+  }
+  ino = getino(pathname);
+  mp = iget(fd,ino);
+
+
+  if(DEBUG){
+    printf("ino is: %d\n",ino);
+  } 
+  if(DEBUG){
+    printf("fd is: %d\n",fd);
+  } 
+  // memset(buf,0,sizeof(buf));
+  inode = &(mp->INODE);
+  for(i = 0; i < 12; i++){
+    char dirname[256];
+    if(inode->i_block[i] == 0){
+      break;//break if we reach the end of the iblock.
+    }
+
+    get_block(fd,inode->i_block[i],buf);
+    dp = (DIR *)buf;
+    cp = buf;
+    if(DEBUG){
+      printf("sizeof cp: %d\n",sizeof(cp));
+    }
+
+    strncpy(dirname, dp->name, dp->name_len);
+    printf("%s\n",dirname);
+    /*
+       while(cp < buf + BLKSIZE){
+    //ignore . and ..
+    if(strcmp(dp->name, ".")==0 || strcmp(dp->name, "..")==0){
+    if(DEBUG)
+    printf("skipping . or ..\n");
+
+    continue;
+    }
+
+
+    //else reg dir or file. check if file
+    printf("%s\n",dp->name);
+    //  statMe2(dp->inode);
+    cp += dp->rec_len;
+    dp = (DIR *)cp;
+    }*/
+  }
+
+  /*
+  //two different situations: ls a file or dir
+  //if file:
+  //
+  if(S_ISREG(mp->INODE.i_mode)){
+//call my statty program to stat the file
+statMe(&(mp->INODE));
+return 1;
+}
+
+// if we get here its a dir.
+// we need to go throught its iblock, and prints its direcnty and look for files
+inode = &(mp->INODE);
+for(i = 0; i < 12; i++){
+if(inode->i_block[i] == 0){
+break;//break if we reach the end of the iblock.
+}
+get_block(dev,(int)inode->i_block[i],buf);
+dp = (DIR *)buf;
+cp = buf;
+
+while(cp < buf + BLKSIZE){
+//ignore . and ..
+if(strcmp(dp->name, ".")==0 || strcmp(dp->name, "..")==0){
+if(DEBUG)
+printf("skipping . or ..\n");
+
+continue;
+}
+
+
+//else reg dir or file. check if file
+statMe(&(iget(dev, dp->inode)->INODE));
+printf("%s\n",dp->name);
+cp += dp->rec_len;
+dp = (DIR *)cp;
+}
+}*/
+return 0;
+}
+
+
+int statMe2(int ino){
+  char name[128];
+  INODE *ip;
+  MINODE *mp;
+
+  if(DEBUG){
+    printf("in statme2\n");
+  }
+
+  mp = iget(dev, ino);
+  ip = &mp->INODE;
+
+  printf("File: \'%s\'\n" RESET, name);
+  printf("Size: %d\tMode: %o\n" RESET, ip->i_size, ip->i_mode);
+  printf("Device: %d\tInode: %d\tLinks: \n" RESET, mp->dev, mp->ino, ip->i_links_count);
+  printf("Access Time: %d\n" RESET, ip->i_atime);
+  printf("Modify Time: %d\n" RESET, ip->i_mtime);
+  printf("Change Time: %d\n" RESET, ip->i_ctime);
+
+
+  return 0;
+}
+int print(MINODE *mip)
+{
+  int blk;
+  char buf[1024], temp[256];
+  int i;
+  DIR *dp;
+  char *cp;
+
+  INODE *ip = &mip->INODE;
+  for (i=0; i < 12; i++){
+    if (ip->i_block[i]==0)
+      return 0;
+    get_block(dev, ip->i_block[i], buf);
+
+    dp = (DIR *)buf; 
+    cp = buf;
+
+    while(cp < buf+1024){
+
+      // make dp->name a string in temp[ ]
+      printf("%d %d %d %s\n", dp->inode, dp->rec_len, dp->name_len, temp);
+
+      cp += dp->rec_len;
+      dp = (DIR *)cp;
+    }
+  }
+}
+
+
 int getino(char *path){
   if(DEBUG){
     printf("WERE IN GETINO. fd =:%d\n",fd);
   }
-
+  
   int ino, index, blk, offset, i,bno;
   char *cp;
   get_block(fd,1, buf);
@@ -350,7 +555,7 @@ int getino(char *path){
     //printf("temp: %s\nname len: %d",temp, dp->name_len);
    // printf("searching for %s\n",names[index]);
     ino = search(ip, names[index]);
-    //if(!ino) exit(-1);
+    //if(!ino) exit(-1); 
     printf("inode is: %d\n",ino);
 
     return ino;
@@ -433,7 +638,60 @@ int tokenize(char *pathname)
   /****** Search *********/
 }
 
+/*
+int search(INODE *ip, char *name)
+{
+  int i, inode;
+  char buff[BLKSIZE];
+  INODE *pip = ip;
 
+  if (DEBUG) printf(YELLOW"Enter search(). Looking for: %s\n"RESET, name);
+  if (DEBUG) printf(YELLOW"\tGiven &ip: %d\n\tGiven name: %s\n"RESET, &ip, name);
+  if (DEBUG) printf(YELLOW"\tInitial buf: %x\n"RESET, buff);
+
+  for (i = 0; i < 12; i++)                                            // Assume only 12 direct blocks
+  {
+    char *cp, dirname[256];
+    DIR *dp;
+
+    get_block(running->cwd->dev, (int)pip->i_block[i], buff);
+
+    if (DEBUG) printf(YELLOW"\tBuf from ip->i_block[%d]: %x\n"RESET, i, buff);
+
+    cp = buff;
+    dp = (DIR *)cp;
+
+    if (DEBUG) printf(YELLOW"\tdp->inode: %d\n"RESET, dp->inode);
+
+    if (DEBUG) printf(YELLOW"\tBegining Scan...\n"RESET);
+
+    while (cp < buff + BLKSIZE)
+    {
+      strncpy(dirname, dp->name, dp->name_len);
+      dirname[dp->name_len] = 0;
+
+      if (!dp->inode) return 0;
+
+      if (DEBUG) printf(YELLOW"\t\tCurrent dir: %s (%d)\n"RESET, dp->name, dp->inode);
+
+      if (strcmp(dirname, name) == 0)                                 // Match found!
+      {
+        if (DEBUG) printf(YELLOW"\t\tFound %s! It's ino is %d.\n\n"RESET, name, dp->inode);
+        return dp->inode;
+      }
+
+      cp += dp->rec_len;                                              // If we didn't find a match, move on to the next one
+      dp = (DIR *)cp;
+    }
+
+    if (DEBUG) printf(RED"\tCouldn't find %s. Are you sure it exists?\n\n"RESET, name);
+
+    return 0;
+  }
+
+  return inode;
+}
+*/
 
 int search(INODE *ip, char *name){
   int i, inode;
@@ -460,7 +718,7 @@ int search(INODE *ip, char *name){
         return dp->inode;
       }
       printf("Inode\tRec_len\tName\tDirname\n");
-      printf("%4d\t%4d\t%4d\t%s\n\n",
+      printf("%4d\t%4d\t%4d\t%s\n\n", 
           dp->inode, dp->rec_len, dp->name_len, dirname);
 
       cp += dp->rec_len;
@@ -468,6 +726,56 @@ int search(INODE *ip, char *name){
     }
     return 0;
   }
+}
+/******* ch_dir ********/
+int ch_dir(char *path){
+  int ino;
+  MINODE *mp;
+  if(DEBUG){
+    printf(CYAN"made it here in cd 1\n"RESET);
+  }
+  //check if there is a path
+  if(strlen(pathname)==0){
+    //if none, go to root
+    iput(running->cwd); //record changes first, then move
+    running->cwd = root;
+    return 1;
+  }
+  if(DEBUG){
+    printf(CYAN"made it here in cd 2\n"RESET);
+  }
+  //else there is  path, so we need to change the current directory to that path
+  dev = running->cwd->dev; 
+  if(DEBUG){
+    printf(CYAN"dev is: %d pathname is: %s in cd\n",dev, path,RESET);
+  }
+  ino = getino(path);
+  printf("here\n\n");
+  if(DEBUG){
+    printf("got ino in cd: %d\n",ino);
+  }
+  if(!ino){
+    printf("Could not find ino\n");
+    return 0;
+  }
+  if(DEBUG){
+    printf(CYAN"made it here in cd 3\n"RESET);
+  }
+  mp = iget(running->cwd->dev, ino); //get the minode corrosponding to the ino
+  //check if the mp inode is a directory or not, if its not, then cant cd into it
+  if(!S_ISDIR(mp->INODE.i_mode)){
+    printf("%s is not a directory.\n",pathname);
+    return 0;
+  }
+
+  if(DEBUG){
+    printf(CYAN"made it here in cd 4\n"RESET);
+  }
+  //record changes again before move
+  iput(running->cwd);
+  running->cwd = mp;
+  return 1;
+
 }
 
 int pwd(){
@@ -483,7 +791,7 @@ int pwd(){
     printf("/\n");
     return 1;
   }
-  findino(mp,&ino,&pino);//get the parent ino
+  findino(mp,&ino,&pino);//get the parent ino 
   if(DEBUG){
     printf("returned from find ino, %d %d\n",ino, pino);
   }
@@ -552,7 +860,7 @@ int cdMe(char *pathname){
     if(!S_ISDIR(mip->INODE.i_mode)){
       printf("%s is not a dir.\n",pathname);
       return -1;
-    }
+    } 
     iput(running->cwd);
     running->cwd = mip;
   }
@@ -565,9 +873,19 @@ int cdMe(char *pathname){
 
 
 /******** id dir ***********/
-
-int iput(MINODE *mip) //This function releases a Minode[] pointed by mip.
+int isDir(int ino)
 {
+  INODE *ip;
+  MINODE *mp;
+
+  mp = iget(running->cwd->dev, ino);
+  if (S_ISDIR(mp->INODE.i_mode)) return 1;
+  iput(mp);
+
+  return 0;
+}
+int iput(MINODE *mip) //This function releases a Minode[] pointed by mip.
+{ 
   int block, offset, i;
   char buf[BLKSIZE];
   INODE *ip;
@@ -622,6 +940,34 @@ int put_block(int fd, int blk, char buf[])
   return 1;
 }
 
+int tst_bit(char *buf, int bit)
+{
+  int i, j;
+
+  i = bit / 8;  j = bit % 8;
+
+  if (buf[i] & (1 << j))
+    return 1;
+  return 0;
+}
+
+int set_bit (char *buf, int bit)
+{
+  int i, j;
+
+  i = bit / 8;  j = bit % 8;
+
+  buf[i] |= (1 << j);
+}
+
+int clr_bit (char *buf, int bit)
+{
+  int i, j;
+
+  i = bit / 8;  j = bit % 8;
+
+  buf[i] &= (0 << j);
+}
 
 
 int quit()

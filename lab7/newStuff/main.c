@@ -73,7 +73,7 @@ int main(int argc, char *argv[]){
         if(DEBUG){
           printf(RED"in ls\n"RESET);
         }
-       // ls2(pathname);
+        ls(pathname);
         break;
 
       case 1:
